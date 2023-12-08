@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Handsontable Example with Date, Time, and Employee Selection</title>
+
+  <!-- Include Handsontable CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@11.1.0/dist/handsontable.full.min.css">
+
+  <!-- Include Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" integrity="sha384-r2qV4O9N7l1cjNyVc6nI5ZBYJXa8pYgWb3P2kvfVfzI2S9WqKVXRITpd2frhKchA" crossorigin="anonymous">
+
+  <!-- Include jQuery -->
+  <script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
+
+  <!-- Include Handsontable JS -->
+  <script src="https://cdn.jsdelivr.net/npm/handsontable@11.1.0/dist/handsontable.full.min.js"></script>
+
+</head>
+<body>
+
+  <label for="month">Select Month:</label>
+  <select id="month">
+    <option value="01">January</option>
+    <option value="02">February</option>
+    <option value="03">March</option>
+    <option value="04">April</option>
+    <option value="05">May</option>
+    <option value="06">June</option>
+    <option value="07">July</option>
+    <option value="08">August</option>
+    <option value="09">September</option>
+    <option value="10">October</option>
+    <option value="11">November</option>
+    <option value="12">December</option>
+  </select>
+
+  <label for="year">Select Year:</label>
+  <input type="number" id="year" min="1900" max="2100" value="2023">
+
+  <div id="example" style="width: 100%; height: 400px;"></div>
+
+  <button onclick="saveJadwal()">Save Jadwal</button>
+  <button onclick="exportToExcel()">Export to Excel</button>
+  <button onclick="printTable()">Print Table</button>
+  <button onclick="moveUp()"><i class="fas fa-arrow-up"></i></button>
+  <button onclick="moveDown()"><i class="fas fa-arrow-down"></i></button>
+
+  <script>
+    $(document).ready(function () {
+      // Function to get the last day of the selected month
+      function getLastDayOfMonth(year, month) {
+        return new Date(year, month + 1, 0).getDate();
+      }
+
+      // Function to generate data based on selected month and year
+      function generateData(month, year) {
+        const lastDayOfMonth = getLastDayOfMonth(year, month);
+        const data = [['Employee', 'Actions'].concat(getDateList(month, year))];
+
+        const employeeList = ['Employee 1', 'Employee 2', 'Employee 3']; // Add more employees as needed
+
+        employeeList.forEach((employee) => {
+          const row = [employee, ''];
+          for (let day = 1; day <= lastDayOfMonth; day++) {
+            row.push('');
+          }
+          data.push(row);
+        });
+
+        return data;
+      }
+
+      // Function to get the list of dates based on selected month and year
+      function getDateList(month, year) {
+        const lastDayOfMonth = getLastDayOfMonth(year, month);
+        const dateList = Array.from({ length: lastDayOfMonth }, (_, i) => {
+          const date = new Date(year, month - 1, i + 1);
+          const options = { weekday: 'long', day: '2-digit' }; // Menggunakan 'long' untuk nama hari panjang
+          return date.toLocaleDateString('id-ID', options).toUpperCase();
+        });
+        return dateList;
+      }
+
+      // Define time options with corresponding colors
+      const timeOptions = [
+        { value: '08:00 - 14:00', color: '#ddddd' },
+        { value: '14:00 - 21:00', color: '#dddddd' },
+        { value: '21:00 - 08:00', color: '#dddddd' }
+      ];
+
+      // Initialize employeeList
+      const employeeList = ['Employee 1', 'Employee 2', 'Employee 3']; // Add more employees as needed
+
+      var container = document.getElementById('example');
+      var monthSelect = document.getElementById('month');
+      var yearInput = document.getElementById('year');
+
+      // Initial data with the current month and year
+      var initialMonth = monthSelect.value;
+      var initialYear = yearInput.value;
+      // Assume there is a function getDataFromDatabase that fetches data from the database
+      var initialData = getDataFromDatabase(initialMonth, initialYear) || generateData(initialMonth, initialYear);
+
+      // Initialize Handsontable with dropdown settings, cell renderer callback, manual row move, and nested headers
+      var hot = new Handsontable(container, {
+        data: initialData,
+        rowHeaders: true,
+        colHeaders: true,
+        contextMenu: true,
+        copyPaste: true,
+        undo: true,
+        redo: true,
+        manualRowMove: true, // Enable manual row move for dragging
+        manualColumnMove: true, // Enable manual column move for sorting
+        columns: Array.from({ length: getLastDayOfMonth(initialYear, initialMonth) + 2 }, (_, i) => {
+          return {
+            type: i === 0 ? 'text' : (i < 27 ? 'dropdown' : 'numeric'),
+            source: i === 0 ? employeeList : (i === 1 ? [''] : (i < 27 ? timeOptions.map(option => option.value) : null)),
+            strict: true,
+            allowInvalid: false,
+            readOnly: i < 2, // Make the first and second columns non-editable
+            renderer: function(instance, td, row, col, prop, value, cellProperties) {
+              if (i >= 2 && i < 27) {
+                const selectedTimeOption = timeOptions.find(option => option.value === value);
+                if (selectedTimeOption) {
+                  td.style.backgroundColor = selectedTimeOption.color;
+                }
+              }
+              Handsontable.renderers.TextRenderer.apply(this, arguments);
+            },
+            validator: function(value, callback) {
+              // Validate that the value is in the employeeList and not empty for column A
+              if (i === 0) {
+                const isValid = employeeList.includes(value) && value.trim() !== '' && !hot.getData().flat().slice(2).includes(value);
+                callback(isValid);
+              } else if (i === 2) {
+                callback(timeOptions.some(option => option.value === value));
+              } else {
+                callback(true); // Allow any value for other columns
+              }
+            }
+          };
+        }),
+        afterChange: function (changes, source) {
+          if (source === 'edit') {
+            calculateTotalHours(hot.getData());
+            markChanges(); // Mark changes after editing
+          }
+        }
+      });
+
+      // Function to update original data when there is a change
+      function markChanges() {
+        var currentData = hot.getData();
+        for (let row = 0; row < currentData.length; row++) {
+          for (let col = 0; col < currentData[row].length; col++) {
+            var originalValue = originalData[row][col];
+            var currentValue = currentData[row][col];
+            if (originalValue !== currentValue) {
+              // Mark the cell with a different background color or any other indication
+              hot.getCell(row, col).style.backgroundColor = '#ffcccc';
+            }
+          }
+        }
+      }
+
+      // Assume there is a function getDataFromDatabase that fetches data from the database
+      function getDataFromDatabase(month, year) {
+        // Implement this function to fetch data from the database
+        // Return null if data is not available
+        // Example: return [['Employee 1', '', '08:00 - 14:00', ...], ['Employee 2', '', '14:00 - 21:00', ...], ...];
+        return null;
+      }
+
+      // Function to get the initial data from the database or generate new data
+      function getInitialData(month, year) {
+        return getDataFromDatabase(month, year) || generateData(month, year);
+      }
+
+      // Function to save the schedule data
+      window.saveJadwal = function () {
+        var data = hot.getData();
+        calculateTotalHours(data);
+        // Perform further processing or send the data to the server
+        console.log('Saved Data:', data);
+        alert('Jadwal berhasil disimpan!');
+      };
+
+      function calculateTotalHours(data) {
+        for (let row = 0; row < data.length; row++) {
+          let totalHours = 0;
+          for (let col = 2; col < data[row].length - 1; col++) {
+            const timeValue = data[row][col];
+            if (timeValue) {
+              const timeRange = timeOptions.find(option => option.value === timeValue);
+              if (timeRange) {
+                const hours = calculateHours(timeRange.value);
+                totalHours += hours;
+              }
+            }
+          }
+          data[row][data[row].length - 1] = totalHours;
+        }
+      }
+
+      function calculateHours(timeRange) {
+        const [start, end] = timeRange.split(' - ');
+        const startTime = parseInt(start.split(':')[0]);
+        const endTime = parseInt(end.split(':')[0]);
+        return endTime < startTime ? endTime + 24 - startTime : endTime - startTime;
+      }
+
+      // Function to export the table to Excel
+      window.exportToExcel = function () {
+        hot.getPlugin('exportFile').downloadFile('xlsx', {filename: 'schedule'});
+      };
+
+      // Function to print the table
+      window.printTable = function () {
+        hot.getPlugin('exportFile').downloadFile('pdf', {filename: 'schedule'});
+      };
+
+      // Function to move the selected row up
+      window.moveUp = function () {
+        const selectedRow = hot.getSelected()[0];
+        if (selectedRow > 0) {
+          hot.alter('move_row', selectedRow, selectedRow - 1);
+        }
+      };
+
+      // Function to move the selected row down
+      window.moveDown = function () {
+        const selectedRow = hot.getSelected()[0];
+        if (selectedRow < hot.countRows() - 1) {
+          hot.alter('move_row', selectedRow, selectedRow + 1);
+        }
+      };
+
+      // Update the table when the month or year is changed
+      $(monthSelect).add(yearInput).on('change', function () {
+        var selectedMonth = monthSelect.value;
+        var selectedYear = yearInput.value;
+        var newData = getInitialData(selectedMonth, selectedYear);
+
+        hot.loadData(newData);
+      });
+
+      // Fetch the original data from the database or generate new data
+      var originalMonth = initialMonth;
+      var originalYear = initialYear;
+      var originalData = getDataFromDatabase(originalMonth, originalYear) || generateData(originalMonth, originalYear);
+    });
+  </script>
+
+</body>
+</html>
